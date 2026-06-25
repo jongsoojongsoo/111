@@ -1,6 +1,6 @@
 # useRef
 
-## useRef가 뭔가?
+## useRef
 
 `{ current: ... }` 객체를 반환하는 훅임
 
@@ -26,10 +26,10 @@ const ref = useRef(초기값);
 React가 리렌더하는 이유 자체가 "화면을 다시 그리기 위해서"잖음
 근데 화면이랑 전혀 관계없는 값까지 리렌더를 유발하면 낭비
 
-그래서 판단 기준을 하나 세움
+그래서 판단 기준을 하나 세워둠.
 
 > 이 값이 바뀔 때 화면도 바뀌어야 하냐?
-> YES → useState / NO → useRef
+> ㅇㅇ → useState / ㄴㄴ → useRef
 
 ---
 
