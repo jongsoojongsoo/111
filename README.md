@@ -2,14 +2,15 @@
 
 ## useRef가 뭔가?
 
-useRef는 `{ current: ... }` 객체를 반환하는 훅임
+`{ current: ... }` 객체를 반환하는 훅임
 
 ```js
 const ref = useRef(초기값);
 // ref = { current: 초기값 }
 ```
 
-리렌더가 일어나도 같은 객체를 유지함 → 즉 ref는 리렌더 사이에서도 값이 살아있음
+리렌더가 일어나도 같은 객체가 유지됨
+→ 컴포넌트 생애 동안 ref는 항상 동일한 참조를 가리킴
 
 ---
 
@@ -21,9 +22,14 @@ const ref = useRef(초기값);
 | 변경 방법 | setState() | .current에 직접 대입 |
 | 쓰는 경우 | 화면에 보여줄 값 | DOM 접근 or 내부 변수 |
 
-> 판단 기준: "이 값 바뀔 때 화면도 바뀌어야 해?"
-> - YES → useState
-> - NO → useRef
+처음엔 그냥 useState 쓰면 되는 거 아닌가 싶었는데
+React가 리렌더하는 이유 자체가 "화면을 다시 그리기 위해서"잖음
+근데 화면이랑 전혀 관계없는 값까지 리렌더를 유발하면 낭비
+
+그래서 판단 기준을 하나 세움
+
+> 이 값이 바뀔 때 화면도 바뀌어야 하냐?
+> YES → useState / NO → useRef
 
 ---
 
@@ -31,26 +37,36 @@ const ref = useRef(초기값);
 
 ### 1. DOM 직접 접근
 
+포커스, 스크롤, 크기 측정 같은 건 state로 못 함
+직접 DOM을 건드려야 하는 상황에서 씀
+
 ```jsx
 const inputRef = useRef(null);
 
-// JSX에서 ref 연결
 <input ref={inputRef} />
 
-// 이후 DOM 직접 조작 가능
 inputRef.current.focus();
 ```
 
-마운트 되기 전엔 `null`, 마운트 후에 실제 DOM 요소가 들어옴
+주의할 게 마운트 전에는 `ref.current === null`임
+useEffect 밖에서 바로 접근하면 null 에러 남
+항상 마운트 이후에 접근해야 함
 
 활용 예시
-- focus / blur 제어
-- 스크롤 이동
-- 크기, 위치 측정 (getBoundingClientRect)
-- canvas, video 같은 미디어 제어
-- Chart.js 같은 외부 라이브러리 붙일 때
+- focus / blur
+- scrollIntoView
+- getBoundingClientRect (크기, 위치)
+- video, canvas 같은 미디어
+- Chart.js, Three.js 같은 외부 라이브러리 붙일 때
 
 ### 2. 렌더 없이 값 저장
+
+DOM이랑 전혀 상관없이 그냥 "리렌더 없이 값 유지"가 필요할 때
+
+처음엔 그냥 컴포넌트 밖에 변수 선언하면 되는 거 아닌가 싶었는데
+컴포넌트 밖 변수는 모든 인스턴스가 공유하는 값이 돼버림
+같은 컴포넌트를 두 개 띄우면 값이 섞임
+useRef는 인스턴스마다 독립적으로 값을 가짐
 
 ```jsx
 const clickCount = useRef(0);
@@ -60,32 +76,15 @@ const handleClick = () => {
 };
 ```
 
-화면엔 안 보여도 되는 값을 저장할 때 씀
-
-활용 예시
-- setInterval / setTimeout ID 저장
-- 이전 state 값 추적
-- 렌더 횟수 카운팅
-- isFirstRender 같은 플래그 변수
-
 ---
 
-## 이전 값 추적 패턴
+## 자주 쓰는 패턴들
 
-```jsx
-const [count, setCount] = useState(0);
-const prevCount = useRef(0);
+### 타이머 ID 저장
 
-useEffect(() => {
-  prevCount.current = count;
-});
-
-// 현재: count, 이전: prevCount.current
-```
-
----
-
-## 타이머 ID 저장 패턴
+setInterval ID를 state로 관리하면 저장할 때마다 리렌더가 일어남
+근데 타이머 ID는 화면에 보여줄 값이 아니잖음
+리렌더가 일어날 이유가 없음 → ref에 그냥 넣으면 됨
 
 ```jsx
 const timerRef = useRef(null);
@@ -101,26 +100,46 @@ const stop = () => {
 };
 ```
 
-state로 타이머 ID 관리하면 불필요한 리렌더 생김 → ref가 적합
+### 이전 state 값 추적
+
+```jsx
+const [count, setCount] = useState(0);
+const prevCount = useRef(0);
+
+useEffect(() => {
+  prevCount.current = count;
+});
+
+// 현재: count, 이전: prevCount.current
+```
+
+useEffect가 렌더 이후에 실행되는 거 이용한 패턴임
+렌더 직후에 현재 값을 ref에 저장해두면 다음 렌더 때 이전 값으로 쓸 수 있음
 
 ---
 
 ## 주의사항
 
-ref.current를 JSX에 직접 넣으면 안 됨
+`ref.current`를 JSX에 직접 넣으면 안 됨
 
 ```jsx
-// 이렇게 하면 값은 바뀌는데 화면이 안 바뀜
+// 값은 바뀌는데 화면이 안 바뀌는 버그
 <p>{ref.current}</p>
+<button onClick={() => ref.current++}>증가</button>
 ```
 
-렌더링 중에 ref 읽거나 쓰지 말 것 → 이벤트 핸들러나 useEffect 안에서만
+콘솔 찍으면 값은 올라가 있는데 화면은 그대로인 상황이 생김
+화면에 보여줘야 하는 값이면 무조건 useState 써야 함
+
+렌더링 중에 ref 읽거나 쓰는 것도 안 됨
+→ 이벤트 핸들러나 useEffect 안에서만 접근할 것
 
 ---
 
 ## 심화: forwardRef
 
-일반 컴포넌트는 ref를 props로 못 받음 → forwardRef로 감싸야 함
+일반 컴포넌트는 ref를 props로 못 받음
+자식 컴포넌트의 DOM에 부모가 접근하고 싶으면 forwardRef로 감싸야 함
 
 ```jsx
 const FancyInput = forwardRef((props, ref) => {
@@ -130,12 +149,13 @@ const FancyInput = forwardRef((props, ref) => {
 // 부모에서
 const inputRef = useRef(null);
 <FancyInput ref={inputRef} />
-inputRef.current.focus(); // 자식 input에 접근 가능
+inputRef.current.focus();
 ```
 
 ### useImperativeHandle
 
-DOM 전체 말고 특정 메서드만 골라서 노출할 때
+DOM 전체를 노출하는 게 찜찜할 때 씀
+필요한 메서드만 골라서 열어줄 수 있음
 
 ```jsx
 const FancyInput = forwardRef((props, ref) => {
@@ -150,12 +170,8 @@ const FancyInput = forwardRef((props, ref) => {
 });
 ```
 
-캡슐화 유지하면서 필요한 것만 열어줄 수 있음
+부모한테 `focus`랑 `clear`만 열어주고 나머지 DOM API는 못 쓰게 막는 거임
+캡슐화 유지하면서 필요한 것만 줄 수 있어서 좋음
 
 ---
 
-## 참고
-
-- https://ko.react.dev/reference/react/useRef
-- https://ko.react.dev/reference/react/forwardRef
-- https://ko.react.dev/reference/react/useImperativeHandle
